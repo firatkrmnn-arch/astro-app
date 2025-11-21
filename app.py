@@ -5,21 +5,88 @@ from geopy.geocoders import ArcGIS
 from datetime import datetime, time
 import pytz
 from fpdf import FPDF
+import base64
 
-# --- AYARLAR VE GÜVENLİK ---
-# Şifreyi kodun içine YAZMIYORUZ. Streamlit Secrets'tan çekiyoruz.
+# --- SAYFA AYARLARI (En başta olmalı) ---
+st.set_page_config(page_title="Astro Analist", page_icon="🔮", layout="centered")
+
+# --- API GÜVENLİĞİ ---
 try:
     if "GOOGLE_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
     else:
-        st.error("⚠️ API Anahtarı bulunamadı! Lütfen Streamlit Cloud panelinde 'Secrets' ayarını yaptığından emin ol.")
+        st.error("⚠️ API Anahtarı bulunamadı! Lütfen Streamlit Secrets ayarlarını kontrol et.")
 except Exception as e:
     st.error(f"API Ayar Hatası: {e}")
 
-# --- TÜRKÇE KARAKTER TEMİZLEYİCİ (PDF İÇİN) ---
+# --- ARKA PLAN RESMİ VE TASARIM ---
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+def set_background(png_file):
+    try:
+        bin_str = get_base64_of_bin_file(png_file)
+        page_bg_img = f"""
+        <style>
+        /* Tüm sayfa arka planı */
+        .stApp {{
+            background-image: url("data:image/jpg;base64,{bin_str}");
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }}
+        
+        /* Başlık ve Yazı Renkleri */
+        h1, h2, h3, p, label {{
+            color: white !important;
+            text-shadow: 2px 2px 4px #000000; /* Okunabilirlik için gölge */
+        }}
+
+        /* Giriş Kutuları (Hafif Şeffaf Siyah) */
+        .stTextInput>div>div>input, .stTextArea>div>div>textarea {{
+            background-color: rgba(0, 0, 0, 0.7) !important; 
+            color: white !important;
+            border: 1px solid #9d71e8;
+        }}
+        
+        /* Form Alanı (Kapsayıcı Kutu) */
+        div[data-testid="stForm"] {{
+            background-color: rgba(0, 0, 0, 0.85);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid #9d71e8;
+        }}
+
+        /* Buton Tasarımı */
+        .stButton>button {{ 
+            width: 100%; 
+            background-color: #9d71e8; 
+            color: white; 
+            border-radius: 12px; 
+            height: 55px; 
+            font-size: 18px; 
+            border: none;
+            font-weight: bold;
+        }}
+        .stButton>button:hover {{
+            background-color: #b28dff;
+            border: 1px solid white;
+        }}
+        </style>
+        """
+        st.markdown(page_bg_img, unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning(f"⚠️ Arka plan resmi ({png_file}) bulunamadı. Lütfen dosyanın 'astro_project' klasöründe olduğundan emin ol.")
+
+# Arka planı yükle (Dosya adı burada)
+set_background("profil.jpg")
+
+# --- YARDIMCI FONKSİYONLAR ---
 def clean_text(text):
-    if not text:
-        return ""
+    if not text: return ""
     replacements = {
         "ı": "i", "ğ": "g", "ü": "u", "ş": "s", "ö": "o", "ç": "c",
         "İ": "I", "Ğ": "G", "Ü": "U", "Ş": "S", "Ö": "O", "Ç": "C",
@@ -29,7 +96,6 @@ def clean_text(text):
         text = text.replace(source, target)
     return text.encode('latin-1', 'replace').decode('latin-1')
 
-# --- ÇEVİRİ SÖZLÜKLERİ ---
 BURC_CEVIRI = {
     "Ari": "Koç", "Tau": "Boğa", "Gem": "İkizler", "Can": "Yengeç",
     "Leo": "Aslan", "Vir": "Başak", "Lib": "Terazi", "Sco": "Akrep",
@@ -43,43 +109,18 @@ EV_CEVIRI = {
     "Tenth_House": "10. Ev", "Eleventh_House": "11. Ev", "Twelfth_House": "12. Ev"
 }
 
-# --- PDF SINIFI ---
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 15)
         self.cell(0, 10, 'Astro Analist - Ozel Rapor', 0, 1, 'C')
         self.ln(10)
-
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, 'Sayfa ' + str(self.page_no()), 0, 0, 'C')
 
-# --- SAYFA YAPISI ---
-st.set_page_config(page_title="Astro Analist", page_icon="🔮", layout="centered")
-
-st.markdown("""
-<style>
-    .stApp { background-color: #0e1117; color: #ffffff; }
-    h1 { color: #9d71e8; text-align: center; font-family: sans-serif; }
-    .stButton>button { 
-        width: 100%; background-color: #9d71e8; color: white; 
-        border-radius: 12px; height: 55px; font-size: 18px; border: none;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# --- BAŞLIK ALANI (Resim + Yazı Yan Yana) ---
-col1, col2 = st.columns([1, 5]) # Ekranı 1'e 5 oranında bölüyoruz
-
-with col1:
-    # Fotoğrafını buraya koyuyoruz (Genişlik 100 piksel)
-    # Eğer fotoğrafın adı farklıysa 'profil.jpg' kısmını değiştir!
-    st.image("profil.jpg", width=90) 
-
-with col2:
-    # Başlık buraya geliyor (Hafif aşağı hizalamak için boşluk bıraktık)
-    st.markdown("<h1 style='margin-top: -10px;'>Astro Analist</h1>", unsafe_allow_html=True)
+# --- UYGULAMA BAŞLIĞI ---
+st.title("🔮 Astro Analist")
 st.markdown("---")
 
 # --- GİRİŞ FORMU ---
@@ -97,34 +138,31 @@ with st.form("entry_form"):
     
     submitted = st.form_submit_button("Analiz Et ve Yanıtla 🚀")
 
+# --- İŞLEM ---
 if submitted:
     if not question:
         st.error("Lütfen bir soru yaz.")
     else:
         with st.spinner('Yıldızlar hizalanıyor...'):
             try:
-                # 1. Konum Bulma (ArcGIS)
-                geolocator = ArcGIS(user_agent="astro_secure_v1", timeout=10) 
+                # 1. Konum
+                geolocator = ArcGIS(user_agent="astro_bg_final", timeout=10) 
                 location = geolocator.geocode(city)
                 
                 if not location:
                     st.error("Şehir bulunamadı.")
                 else:
-                    # 2. Saat Hesaplama
+                    # 2. Saat
                     local_tz = pytz.timezone('Europe/Istanbul')
                     local_dt = datetime.combine(birth_date, birth_time)
                     local_dt = local_tz.localize(local_dt)
                     utc_dt = local_dt.astimezone(pytz.utc)
                     
-                    # 3. Harita Hesapla
+                    # 3. Harita
                     user = AstrologicalSubject(
-                        name, 
-                        utc_dt.year, utc_dt.month, utc_dt.day,
-                        utc_dt.hour, utc_dt.minute,
-                        city, 
-                        lat=location.latitude, 
-                        lng=location.longitude,
-                        tz_str="UTC" 
+                        name, utc_dt.year, utc_dt.month, utc_dt.day,
+                        utc_dt.hour, utc_dt.minute, city, 
+                        lat=location.latitude, lng=location.longitude, tz_str="UTC" 
                     )
 
                     def tr(text): return BURC_CEVIRI.get(text, text)
@@ -138,28 +176,33 @@ if submitted:
                     Merkür: {tr(user.mercury['sign'])}, Venüs: {tr(user.venus['sign'])}, Mars: {tr(user.mars['sign'])}
                     """
 
-                    # 4. AI Prompt
+                    # 4. AI
                     prompt = f"""
                     KİMLİK: Sen "Astro Analist"sin.
                     GÖREV: Aşağıdaki harita verilerini kullanarak, kullanıcının sorduğu SORUYA cevap ver.
-                    
                     KULLANICI SORUSU: "{question}"
-                    
-                    HARİTA VERİLERİ:
-                    {planet_data}
+                    HARİTA VERİLERİ: {planet_data}
                     """
 
                     model = genai.GenerativeModel('gemini-2.5-flash')
                     response = model.generate_content(prompt)
                     
                     st.success(f"✨ {name} için Cevap:")
-                    st.markdown(response.text)
                     
-                    # 5. PDF OLUŞTURMA
+                    # Cevabı okunabilir kutuda göster (Transparan siyah)
+                    st.markdown(
+                        f"""
+                        <div style="background-color: rgba(0,0,0,0.7); padding: 20px; border-radius: 10px; border: 1px solid #9d71e8;">
+                        {response.text}
+                        </div>
+                        """, 
+                        unsafe_allow_html=True
+                    )
+                    
+                    # 5. PDF
                     pdf = PDF()
                     pdf.add_page()
                     pdf.set_font("Arial", size=12)
-                    
                     clean_name = clean_text(name)
                     clean_question = clean_text(question)
                     clean_response = clean_text(response.text)
@@ -168,7 +211,6 @@ if submitted:
                     pdf.cell(0, 10, txt=f"Soru: {clean_question}", ln=1)
                     pdf.ln(5)
                     pdf.multi_cell(0, 5, txt=clean_response)
-                    
                     pdf_output = pdf.output(dest='S').encode('latin-1')
                     
                     st.download_button(
@@ -179,4 +221,4 @@ if submitted:
                     )
 
             except Exception as e:
-                st.error(f"Beklenmedik bir hata oluştu: {e}")
+                st.error(f"Hata: {e}")
