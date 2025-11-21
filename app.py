@@ -1,7 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 from kerykeion import AstrologicalSubject
-from geopy.geocoders import ArcGIS # DEĞİŞİKLİK BURADA: Daha sağlam servis
+from geopy.geocoders import ArcGIS
 from datetime import datetime, time
 import pytz
 from fpdf import FPDF
@@ -9,6 +9,27 @@ from fpdf import FPDF
 # --- AYARLAR ---
 GOOGLE_API_KEY = "AIzaSyCnUIQ2tBG8-Aq2DN-M7s4K3yV-mhgEsE0"
 genai.configure(api_key=GOOGLE_API_KEY)
+
+# --- TÜRKÇE KARAKTER TEMİZLEYİCİ ---
+def clean_text(text):
+    """
+    PDF kütüphanesi (FPDF) standart fontlarla Türkçe karakterleri desteklemez.
+    Bu fonksiyon metni PDF uyumlu hale getirir.
+    """
+    if not text:
+        return ""
+    
+    replacements = {
+        "ı": "i", "ğ": "g", "ü": "u", "ş": "s", "ö": "o", "ç": "c",
+        "İ": "I", "Ğ": "G", "Ü": "U", "Ş": "S", "Ö": "O", "Ç": "C",
+        "â": "a", "î": "i", "û": "u"
+    }
+    
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+    
+    # Desteklenmeyen diğer karakterleri (emoji vs.) '?' yapar
+    return text.encode('latin-1', 'replace').decode('latin-1')
 
 # --- ÇEVİRİ SÖZLÜKLERİ ---
 BURC_CEVIRI = {
@@ -18,7 +39,7 @@ BURC_CEVIRI = {
 }
 
 EV_CEVIRI = {
-    "First_House": "1. Ev (Yükselen)", "Second_House": "2. Ev", "Third_House": "3. Ev",
+    "First_House": "1. Ev", "Second_House": "2. Ev", "Third_House": "3. Ev",
     "Fourth_House": "4. Ev", "Fifth_House": "5. Ev", "Sixth_House": "6. Ev",
     "Seventh_House": "7. Ev", "Eighth_House": "8. Ev", "Ninth_House": "9. Ev",
     "Tenth_House": "10. Ev", "Eleventh_House": "11. Ev", "Twelfth_House": "12. Ev"
@@ -75,17 +96,16 @@ if submitted:
     if not question:
         st.error("Lütfen bir soru yaz.")
     else:
-        with st.spinner('Yıldızlar ve harita hesaplanıyor...'):
+        with st.spinner('Yıldızlar hizalanıyor...'):
             try:
-                # 1. Konum Bulma (ARCGIS DEĞİŞİKLİĞİ)
-                # Nominatim yerine ArcGIS kullanıyoruz. Çok daha sağlamdır.
-                geolocator = ArcGIS(user_agent="astro_final_arcgis", timeout=10) 
+                # 1. Konum Bulma (ArcGIS)
+                geolocator = ArcGIS(user_agent="astro_final_v9", timeout=10) 
                 location = geolocator.geocode(city)
                 
                 if not location:
-                    st.error("Şehir bulunamadı. Lütfen şehir adını İngilizce karakterlerle yazmayı dene (Istanbul, Izmir).")
+                    st.error("Şehir bulunamadı.")
                 else:
-                    # 2. DOĞRU SAAT HESAPLAMASI
+                    # 2. Saat Hesaplama
                     local_tz = pytz.timezone('Europe/Istanbul')
                     local_dt = datetime.combine(birth_date, birth_time)
                     local_dt = local_tz.localize(local_dt)
@@ -102,22 +122,21 @@ if submitted:
                         tz_str="UTC" 
                     )
 
-                    # 4. Verileri Hazırla
                     def tr(text): return BURC_CEVIRI.get(text, text)
                     def tr_house(text): return EV_CEVIRI.get(text, text)
 
                     planet_data = f"""
                     Kişi: {name}, Yer: {city}
-                    Güneş: {tr(user.sun['sign'])} ({tr_house(user.sun['house'])}) ({user.sun['position']:.2f}°)
-                    Ay: {tr(user.moon['sign'])} ({tr_house(user.moon['house'])}) ({user.moon['position']:.2f}°)
+                    Güneş: {tr(user.sun['sign'])} ({tr_house(user.sun['house'])})
+                    Ay: {tr(user.moon['sign'])} ({tr_house(user.moon['house'])})
                     Yükselen: {tr(user.first_house['sign'])}
                     Merkür: {tr(user.mercury['sign'])}, Venüs: {tr(user.venus['sign'])}, Mars: {tr(user.mars['sign'])}
                     """
 
-                    # 5. GEMINI PROMPTU
+                    # 4. AI Prompt
                     prompt = f"""
-                    1. KİMLİK: Sen "Astro Analist"sin. Dürüst, derin ve analitiksin.
-                    2. GÖREV: Aşağıdaki harita verilerini kullanarak, kullanıcının sorduğu SORUYA cevap ver.
+                    KİMLİK: Sen "Astro Analist"sin.
+                    GÖREV: Aşağıdaki harita verilerini kullanarak, kullanıcının sorduğu SORUYA cevap ver.
                     
                     KULLANICI SORUSU: "{question}"
                     
@@ -128,26 +147,30 @@ if submitted:
                     model = genai.GenerativeModel('gemini-2.5-flash')
                     response = model.generate_content(prompt)
                     
-                    # 6. Ekrana Bas
                     st.success(f"✨ {name} için Cevap:")
                     st.markdown(response.text)
                     
-                    # 7. PDF
+                    # 5. PDF OLUŞTURMA (HATA DÜZELTME BURADA)
                     pdf = PDF()
                     pdf.add_page()
                     pdf.set_font("Arial", size=12)
-                    pdf.cell(0, 10, txt=f"Danisan: {name}", ln=1)
-                    pdf.cell(0, 10, txt=f"Soru: {question}", ln=1)
+                    
+                    # İsim, Soru ve Cevabı TEMİZLEYEREK PDF'e yazıyoruz
+                    clean_name = clean_text(name)
+                    clean_question = clean_text(question)
+                    clean_response = clean_text(response.text)
+                    
+                    pdf.cell(0, 10, txt=f"Danisan: {clean_name}", ln=1)
+                    pdf.cell(0, 10, txt=f"Soru: {clean_question}", ln=1)
                     pdf.ln(5)
-                    pdf_text = response.text.replace("ş","s").replace("ğ","g").replace("ı","i").replace("İ","I").replace("ç","c").replace("ö","o").replace("ü","u")
-                    pdf.multi_cell(0, 5, txt=pdf_text)
+                    pdf.multi_cell(0, 5, txt=clean_response)
                     
                     pdf_output = pdf.output(dest='S').encode('latin-1')
                     
                     st.download_button(
                         label="📄 Analizi PDF Olarak İndir",
                         data=pdf_output,
-                        file_name=f"{name}_astro_analiz.pdf",
+                        file_name="astro_analiz.pdf",
                         mime="application/pdf"
                     )
 
