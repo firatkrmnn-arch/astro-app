@@ -57,7 +57,7 @@ def set_background(png_file):
         """
         st.markdown(page_bg_img, unsafe_allow_html=True)
     except FileNotFoundError:
-        pass # Resim yoksa hata verme, devam et
+        pass
 
 set_background("profil.jpg")
 
@@ -118,10 +118,10 @@ if submitted:
     if not question:
         st.error("Lütfen bir soru yaz.")
     else:
-        with st.spinner('Gemini 3.0 Pro haritanı inceliyor...'):
+        with st.spinner('Gemini 2.5 Pro ile derin analiz yapılıyor...'):
             try:
                 # 1. Konum
-                geolocator = ArcGIS(user_agent="astro_gemini3", timeout=10) 
+                geolocator = ArcGIS(user_agent="astro_gemini_25_pro", timeout=10) 
                 location = geolocator.geocode(city)
                 
                 if not location:
@@ -152,11 +152,10 @@ if submitted:
                     Jüpiter: {tr(user.jupiter['sign'])}, Satürn: {tr(user.saturn['sign'])}
                     """
 
-                    # 4. GEMINI 3 PROMPTU
+                    # 4. PROMPT
                     prompt = f"""
-                    KİMLİK: Sen, dünyanın en gelişmiş astroloji yapay zekası "Astro Analist"sin.
-                    MODEL: Gemini 3 Pro yeteneklerini kullanarak derin, katmanlı ve psikolojik analiz yap.
-                    GÖREV: Kullanıcının doğum haritasını ve sorusunu sentezleyerek cevap ver.
+                    KİMLİK: Sen "Astro Analist"sin. 
+                    MODEL GÖREVİ: Gemini 2.5 Pro'nun üstün yeteneklerini kullanarak, kullanıcının sorusuna astrolojik veriler ışığında, psikolojik derinliği olan ve nokta atışı bir cevap ver.
                     
                     KULLANICI SORUSU: "{question}"
                     
@@ -164,11 +163,11 @@ if submitted:
                     {planet_data}
                     """
 
-                    # --- KRİTİK GÜNCELLEME: SENİN GEMINI 3 MODELİN ---
-                    model = genai.GenerativeModel('gemini-3-pro-preview')
+                    # --- MODEL: GEMINI 2.5 PRO (ÜCRETSİZ & ÇOK ZEKİ) ---
+                    model = genai.GenerativeModel('gemini-2.5-pro')
                     response = model.generate_content(prompt)
                     
-                    st.success(f"✨ {name} için Cevap (Gemini 3.0):")
+                    st.success(f"✨ {name} için Cevap:")
                     
                     st.markdown(
                         f"""
@@ -196,7 +195,7 @@ if submitted:
                     st.download_button(
                         label="📄 Analizi PDF Olarak İndir",
                         data=pdf_output,
-                        file_name="astro_analiz_v3.pdf",
+                        file_name="astro_analiz.pdf",
                         mime="application/pdf"
                     )
 
