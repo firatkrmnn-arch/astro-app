@@ -7,10 +7,7 @@ import pytz
 from fpdf import FPDF
 import base64
 
-# --- SAYFA AYARLARI (En başta olmalı) ---
-st.set_page_config(page_title="Astro Analist", page_icon="🔮", layout="centered")
-
-# --- API GÜVENLİĞİ ---
+# --- AYARLAR VE GÜVENLİK ---
 try:
     if "GOOGLE_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
@@ -19,7 +16,7 @@ try:
 except Exception as e:
     st.error(f"API Ayar Hatası: {e}")
 
-# --- ARKA PLAN RESMİ VE TASARIM ---
+# --- ARKA PLAN (Profil Fotosu) ---
 def get_base64_of_bin_file(bin_file):
     with open(bin_file, 'rb') as f:
         data = f.read()
@@ -30,7 +27,6 @@ def set_background(png_file):
         bin_str = get_base64_of_bin_file(png_file)
         page_bg_img = f"""
         <style>
-        /* Tüm sayfa arka planı */
         .stApp {{
             background-image: url("data:image/jpg;base64,{bin_str}");
             background-size: cover;
@@ -38,50 +34,31 @@ def set_background(png_file):
             background-repeat: no-repeat;
             background-attachment: fixed;
         }}
-        
-        /* Başlık ve Yazı Renkleri */
         h1, h2, h3, p, label {{
             color: white !important;
-            text-shadow: 2px 2px 4px #000000; /* Okunabilirlik için gölge */
+            text-shadow: 2px 2px 4px #000000;
         }}
-
-        /* Giriş Kutuları (Hafif Şeffaf Siyah) */
         .stTextInput>div>div>input, .stTextArea>div>div>textarea {{
             background-color: rgba(0, 0, 0, 0.7) !important; 
             color: white !important;
             border: 1px solid #9d71e8;
         }}
-        
-        /* Form Alanı (Kapsayıcı Kutu) */
         div[data-testid="stForm"] {{
             background-color: rgba(0, 0, 0, 0.85);
             padding: 30px;
             border-radius: 15px;
             border: 1px solid #9d71e8;
         }}
-
-        /* Buton Tasarımı */
         .stButton>button {{ 
-            width: 100%; 
-            background-color: #9d71e8; 
-            color: white; 
-            border-radius: 12px; 
-            height: 55px; 
-            font-size: 18px; 
-            border: none;
-            font-weight: bold;
-        }}
-        .stButton>button:hover {{
-            background-color: #b28dff;
-            border: 1px solid white;
+            width: 100%; background-color: #9d71e8; color: white; 
+            border-radius: 12px; height: 55px; font-size: 18px; border: none; font-weight: bold;
         }}
         </style>
         """
         st.markdown(page_bg_img, unsafe_allow_html=True)
     except FileNotFoundError:
-        st.warning(f"⚠️ Arka plan resmi ({png_file}) bulunamadı. Lütfen dosyanın 'astro_project' klasöründe olduğundan emin ol.")
+        pass # Resim yoksa hata verme, devam et
 
-# Arka planı yükle (Dosya adı burada)
 set_background("profil.jpg")
 
 # --- YARDIMCI FONKSİYONLAR ---
@@ -119,11 +96,10 @@ class PDF(FPDF):
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, 'Sayfa ' + str(self.page_no()), 0, 0, 'C')
 
-# --- UYGULAMA BAŞLIĞI ---
+# --- UYGULAMA ---
 st.title("🔮 Astro Analist")
 st.markdown("---")
 
-# --- GİRİŞ FORMU ---
 with st.form("entry_form"):
     col1, col2 = st.columns(2)
     with col1:
@@ -133,20 +109,19 @@ with st.form("entry_form"):
         birth_date = st.date_input("Doğum Tarihi", min_value=datetime(1940, 1, 1))
         birth_time = st.time_input("Doğum Saati", value=time(12, 0)) 
     
-    st.markdown("### 💭 Neyin Cevabını Arıyorsun?")
+    st.markdown("### 💭 Sorun Nedir?")
     question = st.text_area("Aklındaki spesifik soruyu buraya yaz.", height=100)
     
     submitted = st.form_submit_button("Analiz Et ve Yanıtla 🚀")
 
-# --- İŞLEM ---
 if submitted:
     if not question:
         st.error("Lütfen bir soru yaz.")
     else:
-        with st.spinner('Yıldızlar hizalanıyor...'):
+        with st.spinner('Gemini 3.0 Pro haritanı inceliyor...'):
             try:
                 # 1. Konum
-                geolocator = ArcGIS(user_agent="astro_bg_final", timeout=10) 
+                geolocator = ArcGIS(user_agent="astro_gemini3", timeout=10) 
                 location = geolocator.geocode(city)
                 
                 if not location:
@@ -174,22 +149,27 @@ if submitted:
                     Ay: {tr(user.moon['sign'])} ({tr_house(user.moon['house'])})
                     Yükselen: {tr(user.first_house['sign'])}
                     Merkür: {tr(user.mercury['sign'])}, Venüs: {tr(user.venus['sign'])}, Mars: {tr(user.mars['sign'])}
+                    Jüpiter: {tr(user.jupiter['sign'])}, Satürn: {tr(user.saturn['sign'])}
                     """
 
-                    # 4. AI
+                    # 4. GEMINI 3 PROMPTU
                     prompt = f"""
-                    KİMLİK: Sen "Astro Analist"sin.
-                    GÖREV: Aşağıdaki harita verilerini kullanarak, kullanıcının sorduğu SORUYA cevap ver.
+                    KİMLİK: Sen, dünyanın en gelişmiş astroloji yapay zekası "Astro Analist"sin.
+                    MODEL: Gemini 3 Pro yeteneklerini kullanarak derin, katmanlı ve psikolojik analiz yap.
+                    GÖREV: Kullanıcının doğum haritasını ve sorusunu sentezleyerek cevap ver.
+                    
                     KULLANICI SORUSU: "{question}"
-                    HARİTA VERİLERİ: {planet_data}
+                    
+                    HARİTA VERİLERİ:
+                    {planet_data}
                     """
 
-                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    # --- KRİTİK GÜNCELLEME: SENİN GEMINI 3 MODELİN ---
+                    model = genai.GenerativeModel('gemini-3-pro-preview')
                     response = model.generate_content(prompt)
                     
-                    st.success(f"✨ {name} için Cevap:")
+                    st.success(f"✨ {name} için Cevap (Gemini 3.0):")
                     
-                    # Cevabı okunabilir kutuda göster (Transparan siyah)
                     st.markdown(
                         f"""
                         <div style="background-color: rgba(0,0,0,0.7); padding: 20px; border-radius: 10px; border: 1px solid #9d71e8;">
@@ -216,7 +196,7 @@ if submitted:
                     st.download_button(
                         label="📄 Analizi PDF Olarak İndir",
                         data=pdf_output,
-                        file_name="astro_analiz.pdf",
+                        file_name="astro_analiz_v3.pdf",
                         mime="application/pdf"
                     )
 
