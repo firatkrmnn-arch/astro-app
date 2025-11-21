@@ -69,7 +69,17 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🔮 Astro Analist")
+# --- BAŞLIK ALANI (Resim + Yazı Yan Yana) ---
+col1, col2 = st.columns([1, 5]) # Ekranı 1'e 5 oranında bölüyoruz
+
+with col1:
+    # Fotoğrafını buraya koyuyoruz (Genişlik 100 piksel)
+    # Eğer fotoğrafın adı farklıysa 'profil.jpg' kısmını değiştir!
+    st.image("profil.jpg", width=90) 
+
+with col2:
+    # Başlık buraya geliyor (Hafif aşağı hizalamak için boşluk bıraktık)
+    st.markdown("<h1 style='margin-top: -10px;'>Astro Analist</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
 # --- GİRİŞ FORMU ---
