@@ -1,13 +1,12 @@
 import streamlit as st
 import google.generativeai as genai
 from kerykeion import AstrologicalSubject
-from geopy.geocoders import Nominatim
+from geopy.geocoders import ArcGIS # DEĞİŞİKLİK BURADA: Daha sağlam servis
 from datetime import datetime, time
 import pytz
-from fpdf import FPDF # PDF oluşturma kütüphanesi
+from fpdf import FPDF
 
 # --- AYARLAR ---
-# DİKKAT: Bu anahtar GitHub'da görünüyor. Gerçek projen büyüdüğünde gizlenmeli.
 GOOGLE_API_KEY = "AIzaSyCnUIQ2tBG8-Aq2DN-M7s4K3yV-mhgEsE0"
 genai.configure(api_key=GOOGLE_API_KEY)
 
@@ -62,7 +61,6 @@ with st.form("entry_form"):
         city = st.text_input("Doğum Şehri", "Istanbul")
     with col2:
         birth_date = st.date_input("Doğum Tarihi", min_value=datetime(1940, 1, 1))
-        # Saati 12:00'a sabitledik ki butona basınca sıfırlanmasın
         birth_time = st.time_input("Doğum Saati", value=time(12, 0)) 
     
     st.markdown("### 💭 Neyin Cevabını Arıyorsun?")
@@ -77,23 +75,23 @@ if submitted:
     if not question:
         st.error("Lütfen bir soru yaz.")
     else:
-        with st.spinner('Bağlantı ve harita hesaplanıyor...'):
+        with st.spinner('Yıldızlar ve harita hesaplanıyor...'):
             try:
-                # 1. Konum Bulma (TIMEOUT FIX'İ BURADA)
-                # 10 saniye bekleme süresi ekledik.
-                geolocator = Nominatim(user_agent="astro_final_fix", timeout=10) 
+                # 1. Konum Bulma (ARCGIS DEĞİŞİKLİĞİ)
+                # Nominatim yerine ArcGIS kullanıyoruz. Çok daha sağlamdır.
+                geolocator = ArcGIS(user_agent="astro_final_arcgis", timeout=10) 
                 location = geolocator.geocode(city)
                 
                 if not location:
-                    st.error("Şehir bulunamadı.")
+                    st.error("Şehir bulunamadı. Lütfen şehir adını İngilizce karakterlerle yazmayı dene (Istanbul, Izmir).")
                 else:
-                    # 2. DOĞRU SAAT HESAPLAMASI (pytz ile tarihsel DST hesaplama)
+                    # 2. DOĞRU SAAT HESAPLAMASI
                     local_tz = pytz.timezone('Europe/Istanbul')
                     local_dt = datetime.combine(birth_date, birth_time)
                     local_dt = local_tz.localize(local_dt)
                     utc_dt = local_dt.astimezone(pytz.utc)
                     
-                    # 3. Harita Hesapla (UTC Olarak)
+                    # 3. Harita Hesapla
                     user = AstrologicalSubject(
                         name, 
                         utc_dt.year, utc_dt.month, utc_dt.day,
@@ -116,11 +114,10 @@ if submitted:
                     Merkür: {tr(user.mercury['sign'])}, Venüs: {tr(user.venus['sign'])}, Mars: {tr(user.mars['sign'])}
                     """
 
-                    # 5. SENİN GEM PROMPTUN: Soruya Cevap Vermeye Odaklı
+                    # 5. GEMINI PROMPTU
                     prompt = f"""
-                    1. KİMLİK (ROLE): Sen "Astro Analist"sin. Dürüst, derin ve analitiksin.
-
-                    2. GÖREV: Aşağıdaki harita verilerini kullanarak, kullanıcının sorduğu SPESİFİK SORUYA cevap ver. Genel yorum yapma.
+                    1. KİMLİK: Sen "Astro Analist"sin. Dürüst, derin ve analitiksin.
+                    2. GÖREV: Aşağıdaki harita verilerini kullanarak, kullanıcının sorduğu SORUYA cevap ver.
                     
                     KULLANICI SORUSU: "{question}"
                     
@@ -135,14 +132,13 @@ if submitted:
                     st.success(f"✨ {name} için Cevap:")
                     st.markdown(response.text)
                     
-                    # 7. PDF OLUŞTURMA VE İNDİRME BUTONU
+                    # 7. PDF
                     pdf = PDF()
                     pdf.add_page()
                     pdf.set_font("Arial", size=12)
                     pdf.cell(0, 10, txt=f"Danisan: {name}", ln=1)
                     pdf.cell(0, 10, txt=f"Soru: {question}", ln=1)
                     pdf.ln(5)
-                    # Not: Türkçe karakter sorunu olmaması için basit replace kullandık.
                     pdf_text = response.text.replace("ş","s").replace("ğ","g").replace("ı","i").replace("İ","I").replace("ç","c").replace("ö","o").replace("ü","u")
                     pdf.multi_cell(0, 5, txt=pdf_text)
                     
