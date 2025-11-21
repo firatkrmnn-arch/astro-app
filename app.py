@@ -6,29 +6,27 @@ from datetime import datetime, time
 import pytz
 from fpdf import FPDF
 
-# --- AYARLAR ---
-GOOGLE_API_KEY = "AIzaSyCnUIQ2tBG8-Aq2DN-M7s4K3yV-mhgEsE0"
-genai.configure(api_key=GOOGLE_API_KEY)
+# --- AYARLAR VE GÜVENLİK ---
+# Şifreyi kodun içine YAZMIYORUZ. Streamlit Secrets'tan çekiyoruz.
+try:
+    if "GOOGLE_API_KEY" in st.secrets:
+        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    else:
+        st.error("⚠️ API Anahtarı bulunamadı! Lütfen Streamlit Cloud panelinde 'Secrets' ayarını yaptığından emin ol.")
+except Exception as e:
+    st.error(f"API Ayar Hatası: {e}")
 
-# --- TÜRKÇE KARAKTER TEMİZLEYİCİ ---
+# --- TÜRKÇE KARAKTER TEMİZLEYİCİ (PDF İÇİN) ---
 def clean_text(text):
-    """
-    PDF kütüphanesi (FPDF) standart fontlarla Türkçe karakterleri desteklemez.
-    Bu fonksiyon metni PDF uyumlu hale getirir.
-    """
     if not text:
         return ""
-    
     replacements = {
         "ı": "i", "ğ": "g", "ü": "u", "ş": "s", "ö": "o", "ç": "c",
         "İ": "I", "Ğ": "G", "Ü": "U", "Ş": "S", "Ö": "O", "Ç": "C",
         "â": "a", "î": "i", "û": "u"
     }
-    
     for source, target in replacements.items():
         text = text.replace(source, target)
-    
-    # Desteklenmeyen diğer karakterleri (emoji vs.) '?' yapar
     return text.encode('latin-1', 'replace').decode('latin-1')
 
 # --- ÇEVİRİ SÖZLÜKLERİ ---
@@ -85,10 +83,7 @@ with st.form("entry_form"):
         birth_time = st.time_input("Doğum Saati", value=time(12, 0)) 
     
     st.markdown("### 💭 Neyin Cevabını Arıyorsun?")
-    question = st.text_area(
-        "Aklındaki spesifik soruyu buraya yaz.",
-        height=100
-    )
+    question = st.text_area("Aklındaki spesifik soruyu buraya yaz.", height=100)
     
     submitted = st.form_submit_button("Analiz Et ve Yanıtla 🚀")
 
@@ -99,7 +94,7 @@ if submitted:
         with st.spinner('Yıldızlar hizalanıyor...'):
             try:
                 # 1. Konum Bulma (ArcGIS)
-                geolocator = ArcGIS(user_agent="astro_final_v9", timeout=10) 
+                geolocator = ArcGIS(user_agent="astro_secure_v1", timeout=10) 
                 location = geolocator.geocode(city)
                 
                 if not location:
@@ -150,12 +145,11 @@ if submitted:
                     st.success(f"✨ {name} için Cevap:")
                     st.markdown(response.text)
                     
-                    # 5. PDF OLUŞTURMA (HATA DÜZELTME BURADA)
+                    # 5. PDF OLUŞTURMA
                     pdf = PDF()
                     pdf.add_page()
                     pdf.set_font("Arial", size=12)
                     
-                    # İsim, Soru ve Cevabı TEMİZLEYEREK PDF'e yazıyoruz
                     clean_name = clean_text(name)
                     clean_question = clean_text(question)
                     clean_response = clean_text(response.text)
